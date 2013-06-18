@@ -599,7 +599,6 @@ $(window).on('ready', function() {
     // custom width to help center columns
     columnWidth: function( containerWidth ) {
       var width = $('#ads').parent().width();
-      console.log(width / Math.floor(width / 220));
       return width / Math.floor(width / 220);
     }
   });
