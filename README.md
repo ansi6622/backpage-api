@@ -14,4 +14,4 @@ A jQuery plug-in is provided for your convenience.
 
 We welcome developers to build their own integration with the XML API directly.
 
-[Backpage XML API Reference](https://github.com/backpage/backpage-api/wiki/Backpage-XML-API-Reference)
+[Backpage XML API Reference](https://github.com/backpage/backpage-api/wiki/Backpage-XML-Reference)
