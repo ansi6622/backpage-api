@@ -10,8 +10,8 @@ A demo mobile application has been included to get you started.  You can find th
 
 A jQuery plug-in is provided for your convenience.
 
-[Backpage jQuery Plugin Reference](wiki/Backpage-jQuery-Plugin-Reference)
+[Backpage jQuery Plugin Reference](https://github.com/backpage/backpage-api/wiki/Backpage-jQuery-Plugin-Reference)
 
 We welcome developers to build their own integration with the XML API directly.
 
-[Backpage XML API Reference](wiki/Backpage-XML-API-Reference)
+[Backpage XML API Reference](https://github.com/backpage/backpage-api/wiki/Backpage-XML-API-Reference)
