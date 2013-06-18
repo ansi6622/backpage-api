@@ -13,6 +13,24 @@
   var baseSite = 'www.backpage.com';
 
   /**
+   * In memory cache of requests.
+   * @type {Object}
+   */
+  var cache = {};
+
+  /**
+   * How long to cache each request type.
+   * @type {Object}
+   */
+  var cacheTimes = {
+    '/Site.xml':     60*60*24, // 1 day
+    '/Section.xml':  60*60,    // 1 hour
+    '/Category.xml': 60*60,    // 1 hour
+    '/Search.xml':   5*60,     // 5 minutes
+    '/Ad.xml':       5*60      // 5 minutes
+  };
+
+  /**
    * Query the backpage.com API.  Options are as follows:
    * 
    *   site
@@ -48,9 +66,52 @@
       params: {}
     }, options);
 
+    /**
+     * Get an item from cache.
+     * @param  {Object} obj The object to use for the hash key.
+     * @return {Object}     Cached object or null.
+     */
+    var cacheGet = function(obj) {
+      var key = JSON.stringify(obj);
+      if (cache.hasOwnProperty(key)) {
+        var now = new Date().getTime() / 1000;
+        var cachedObj = cache[key];
+        // cache is stale
+        if (cachedObj.cachedAt + cacheTimes[obj.object] < now) {
+          delete cache[key];
+          return;
+        }
+        return cachedObj.obj;
+      }
+    };
+
+    /**
+     * Sets an item to the cache.
+     * @param  {[type]} settings The object to use for the hash key.
+     * @param  {[type]} obj      The object to cache.
+     */
+    var cacheSet = function(settings, obj) {
+      var cachedAt = new Date().getTime() / 1000;
+      var key = JSON.stringify(settings);
+      cache[key] = {
+        cachedAt: cachedAt,
+        obj: obj
+      };
+    };
+
+    // construct url to endpoint
     settings.site = 'http://' + settings.site + '/online/api';
     settings.object = '/' + settings.object + '.xml';
 
+    // check cache and return cached data if it's a hit
+    var cachedData = cacheGet(settings);
+    if (cachedData) {
+      var deferred = new $.Deferred();
+      deferred.resolve(cachedData);
+      return deferred.promise();
+    }
+
+    // make ajax request and return deferred object
     return $.ajax({
       type: 'get',
       url: settings.site + settings.object,
@@ -87,6 +148,8 @@
         });
         result.push(item);
       });
+      // set the result to cache
+      cacheSet(settings, result);
       return result;
     });
   };
