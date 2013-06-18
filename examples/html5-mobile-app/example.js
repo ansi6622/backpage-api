@@ -26,6 +26,12 @@ $(window).on('ready', function() {
   var curPage = 0;
 
   /**
+   * If we've hit the last page of results, prevents further queries.
+   * @type {Boolean}
+   */
+  var lastPage = false;
+
+  /**
    * Splits the current URL hash into key/value pairs.
    * @return {Object} Key/value pairs representing the URL hash.
    */
@@ -68,7 +74,7 @@ $(window).on('ready', function() {
   /**
    * Renders the page based on the current URL hash.
    */
-  var routeHash = function() {
+  var renderHash = function() {
     var opts = curOpts();
     // if a site has been chosen
     if (opts.site) {
@@ -117,7 +123,7 @@ $(window).on('ready', function() {
           });
           requestsPending++;
           // if this is the first page then remove any ads already on the page
-          // infinite scroll calls routeHash() to load more images so don't
+          // infinite scroll calls renderHash() to load more images so don't
           // remove if curPage != 0
           if (curPage === 0) {
             removeAds();
@@ -128,6 +134,10 @@ $(window).on('ready', function() {
           // request ads
           loadAds(opts)
           .then(function(ads) {
+            // no more results left
+            if (ads.length === 0) {
+              lastPage = true;
+            }
             requestsPending--;
             renderAds({
               ads: ads,
@@ -147,6 +157,14 @@ $(window).on('ready', function() {
         }
       });
     }
+  };
+
+  /**
+   * Resets ad paging variables for new search results.
+   */
+  var resetAdPaging = function() {
+    curPage = 0;
+    lastPage = true;
   };
 
   /**
@@ -227,20 +245,25 @@ $(window).on('ready', function() {
           $('#disclaimer').modal('show');
           $('.agree-btn').off('click');
           $('.agree-btn').on('click', function() {
-            // close categories list
-            $('#categories-toggle-content').collapse('toggle');
-            curPage = 0;
-            window.location.hash = buildHash(opts);
+            resetAdPaging();
+            selectCategory(opts);
           });
         // no disclaimer
         } else {
-            // close categories list
-          $('#categories-toggle-content').collapse('toggle');
-          curPage = 0;
-          window.location.hash = buildHash(opts);
+          resetAdPaging();
+          selectCategory(opts);
         }
       });
     });
+  };
+
+  /**
+   * Closes the category selector and sets the new hash based on opts.
+   * @param  {[type]} opts Key/value pairs representing the URL hash.
+   */
+  var selectCategory = function(opts) {
+    $('#categories-toggle-content').collapse('toggle');
+    window.location.hash = buildHash(opts);
   };
 
   /**
@@ -252,9 +275,9 @@ $(window).on('ready', function() {
     var params = {
       Category: opts.category,
       Section: opts.section,
-      // 25 per page
-      Max: 25,
-      StartIndex: opts.page * 25 || 0
+      // 100 per page
+      Max: 100,
+      StartIndex: opts.page * 100 || 0
     };
     if (opts.keywords) {
       params.Keyword = opts.keywords;
@@ -319,7 +342,6 @@ $(window).on('ready', function() {
         }));
       }
       // setup click handler for each result
-      html.find('a').off('click');
       html.find('a').on('click', function(e) {
         e.preventDefault();
         // load ad details
@@ -474,18 +496,20 @@ $(window).on('ready', function() {
    * is fired.  Adjusts the width of the modal to better fit the screen.
    */
   var resizeModalShow = function() {
+    // padding changes at 480px
     if ($(window).width() < 480) {
       $('#view-ad').width($(window).width() - 20);
     } else {
       $('#view-ad').width($(window).width() - 40);
     }
+    // body is padded 20px on either side when width is >= 768
     if ($(window).width() >= 768) {
       $('#view-ad').css('margin-left', -(($(window).width() - 40) / 2));
     } else {
       $('#view-ad').css('margin-left', 0);
     }
-    $('#view-ad').css('top', $('body').scrollTop() + 15);
-    // $('#view-ad').css('top', '15px');
+    // push down to current scroll location
+    $('#view-ad').css('top', $('body').scrollTop() + 20);
   };
 
   /**
@@ -493,12 +517,13 @@ $(window).on('ready', function() {
    * is fired.  Adjust the height of the modal to better fit the screen.
    */
   var resizeModalShown = function() {
+    // 40px padding on top/bottom
     var viewAdHeight = $(window).height() - 80;
     $('#view-ad').height(viewAdHeight);
+    // body height is total height minus footer minus header minus an additional 30 from padding
     var adBodyHeight = viewAdHeight - $('#view-ad .modal-header').height() - $('#view-ad .modal-footer').height() - 30;
     $('.ad-body').css('max-height', adBodyHeight);
     $('.ad-body').css('height', adBodyHeight);
-    // console.log
   };
 
   /**
@@ -572,7 +597,7 @@ $(window).on('ready', function() {
 
   // handle url hash changes
   $(window).on('hashchange', function() {
-    routeHash();
+    renderHash();
   });
 
   // populate the typeahead with all US sites
@@ -603,6 +628,7 @@ $(window).on('ready', function() {
 
       // populate the category list when a site is selected
       updater: function(site) {
+        resetAdPaging();
         window.location.hash = buildHash($.extend(curOpts(), {site: site}));
         return site;
       }
@@ -627,19 +653,19 @@ $(window).on('ready', function() {
       if (!isLoading) {
         isLoading = true;
         curPage++;
-        routeHash();
+        renderHash();
       }
     }
   });
 
-  // run a search
+  // bind search button to run a search
   $('#search-button').on('click', function() {
     $('#search-toggle-content').collapse('toggle');
-    curPage = 0;
+    resetAdPaging();
     window.location.hash = buildHash($.extend(curOpts(), getSearchOpts()));
   });
 
-  // reset current search options
+  // bind search reset button to reset search options
   $('#search-reset-button').on('click', function() {
     $('.search-field').val('');
     $('#search-button').trigger('click');
@@ -677,5 +703,5 @@ $(window).on('ready', function() {
   }, 500);
 
   // load the current hash
-  routeHash();
+  renderHash();
 });

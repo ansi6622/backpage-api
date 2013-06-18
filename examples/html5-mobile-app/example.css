@@ -7,10 +7,6 @@
 }
 body {
   padding-top: 10px;
-  -webkit-transform: translateZ(0);
-  -webkit-perspective: 1000;
-  -webkit-backface-visibility: hidden;
-  -webkit-translate3d(0);
 }
 h3 {
   margin-top: 0px;
@@ -30,10 +26,6 @@ h3 {
 }
 .ad-thumb a img {
   display: block;
-  -webkit-transform: translateZ(0);
-  -webkit-perspective: 1000;
-  -webkit-backface-visibility: hidden;
-  -webkit-translate3d(0);
 }
 .logo {
   margin-bottom: 10px;
