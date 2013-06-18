@@ -351,7 +351,7 @@ $(window).on('ready', function() {
         })
         .then(function(ads) {
           // render ad details
-          renderAd(ads.pop(), opts.categories, opts.site);
+          renderAd(ads[0], opts.categories, opts.site);
         });
       });
       // append ads to container and notify masonry
@@ -509,7 +509,9 @@ $(window).on('ready', function() {
       $('#view-ad').css('margin-left', 0);
     }
     // push down to current scroll location
-    $('#view-ad').css('top', $('body').scrollTop() + 20);
+    // ios only
+    // $('#view-ad').css('top', $('body').scrollTop() + 20);
+    $('#view-ad').css('top', 15);
   };
 
   /**
