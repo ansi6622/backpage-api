@@ -75,7 +75,12 @@ $(window).on('ready', function() {
       // populate site input
       $('#site-input').val(opts.site);
       // set terms of service link
-      $('.tos-link').attr('href', 'http://' + opts.site + '/online/TermsOfUse');
+      var tosUrl = 'http://' + opts.site + '/online/TermsOfUse';
+      $('.tos-link').off('click');
+      $('.tos-link').on('click', function(e) {
+        e.preventDefault();
+        window.open(tosUrl, '_blank', 'location=yes');
+      });
       // load section/category list for current site
       requestsPending++;
       loadCategories(opts.site)
@@ -368,11 +373,19 @@ $(window).on('ready', function() {
     $('.ad-text').html(ad.Ad);
     $('.ad-posted-at').text(moment(ad.PostingTime).fromNow());
     $('.ad-region').text(ad.Region);
-    $('.full-ad-link').attr('href', ad.AdUrl);
+    $('.full-ad-link').off('click');
+    $('.full-ad-link').on('click', function(e) {
+      e.preventDefault();
+      window.open(ad.AdUrl, '_blank', 'location=yes');
+    });
     // show map link
     if (ad.MapAddress && ad.MapZip) {
       var mapUrl = "http://maps.google.com/maps?q=" + encodeURIComponent(ad.MapAddress) + " " + ad.MapZip;
-      $('.map-link').attr('href', mapUrl);
+      $('.map-link').off('click');
+      $('.map-link').on('click', function(e) {
+        e.preventDefault();
+        window.open(mapUrl, '_blank', 'location=yes');
+      });
       $('.map-link').show();
     } else {
       $('.map-link').hide();
@@ -380,16 +393,19 @@ $(window).on('ready', function() {
     // hide reply link by default
     $('.reply-link').hide();
     if (ad.AllowReplies != 'No') {
-      var replyURL = 'http://posting.' + site;
-      // find category the ad is in to get CategoryKey for replyURL
-      for (var i in categories) {
-        if (categories[i].Id == ad.Category) {
-          replyURL += '/' + categories[i].CategoryKey + '/classifieds/Reply?oid=' + ad.Id;
-          $('.reply-link').attr('href', replyURL);
+      var replyUrl = 'http://posting.' + site;
+      // find category the ad is in to get CategoryKey for replyUrl
+      $.each(categories, function(e, category) {
+        if (category.Id == ad.Category) {
+          replyUrl += '/' + category.CategoryKey + '/classifieds/Reply?oid=' + ad.Id;
+          $('.reply-link').off('click');
+          $('.reply-link').on('click', function(e) {
+            e.preventDefault();
+            window.open(replyUrl, '_blank', 'location=yes');
+          });
           $('.reply-link').show();
-          break;
         }
-      }
+      });
     }
     // show poster's age
     if (ad.Age) {
@@ -468,7 +484,8 @@ $(window).on('ready', function() {
     } else {
       $('#view-ad').css('margin-left', 0);
     }
-    $('#view-ad').css('top', '15px');
+    $('#view-ad').css('top', $('body').scrollTop() + 15);
+    // $('#view-ad').css('top', '15px');
   };
 
   /**
@@ -481,6 +498,7 @@ $(window).on('ready', function() {
     var adBodyHeight = viewAdHeight - $('#view-ad .modal-header').height() - $('#view-ad .modal-footer').height() - 30;
     $('.ad-body').css('max-height', adBodyHeight);
     $('.ad-body').css('height', adBodyHeight);
+    // console.log
   };
 
   /**
