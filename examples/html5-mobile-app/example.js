@@ -402,7 +402,23 @@ $(window).on('ready', function() {
     // scroll to top of ad modal body
     $('.ad-body').scrollTop(0);
     $('.ad-title').text(ad.Title);
-    $('.ad-text').html(ad.Ad);
+    // rewrite links to open in new window
+    var content;
+    try {
+      content = $(ad.Ad);
+      content.find('a').each(function() {
+        var url = $(this).attr('href');
+        $(this).on('click', function(e) {
+          e.preventDefault();
+          window.open(url, '_blank', 'location=yes');
+        });
+      });
+    // failed to parse html
+    } catch (e) {
+      content = ad.Ad;
+      content = content.replace(/<a(\s[^>]*)?>(.*?)<\/a>/ig, '$2');
+    }
+    $('.ad-text').html(content);
     $('.ad-posted-at').text(moment(ad.PostingTime).fromNow());
     $('.ad-region').text(ad.Region);
     $('.full-ad-link').off('click');
