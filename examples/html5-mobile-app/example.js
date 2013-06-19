@@ -173,14 +173,23 @@ $(window).on('ready', function() {
    * @return {Object}      Deferred object.
    */
   var loadCategories = function(site) {
+    var params = {};
+    try {
+      if (device.platform == 'iOS') {
+        params.os = 'ios';
+      }
+    } catch (e) {
+    }
     return $.when(
       $.fn.backpage({
         site: site,
-        object: 'Section'
+        object: 'Section',
+        params: params
       }),
       $.fn.backpage({
         site: site,
-        object: 'Category'
+        object: 'Category',
+        params: params
       })
     );
   };
@@ -275,9 +284,9 @@ $(window).on('ready', function() {
     var params = {
       Category: opts.category,
       Section: opts.section,
-      // 100 per page
-      Max: 100,
-      StartIndex: opts.page * 100 || 0
+      // 25 per page
+      Max: 25,
+      StartIndex: opts.page * 25 || 0
     };
     if (opts.keywords) {
       params.Keyword = opts.keywords;
@@ -356,6 +365,7 @@ $(window).on('ready', function() {
       });
       // append ads to container and notify masonry
       container.append(html).masonry('appended', html);
+      container.masonry('reload');
     });
 
     // when all images have loaded
@@ -662,7 +672,6 @@ $(window).on('ready', function() {
 
   // bind search button to run a search
   $('#search-button').on('click', function() {
-    $('#search-toggle-content').collapse('toggle');
     resetAdPaging();
     window.location.hash = buildHash($.extend(curOpts(), getSearchOpts()));
   });
@@ -673,12 +682,26 @@ $(window).on('ready', function() {
     $('#search-button').trigger('click');
   });
 
+  var viewingAd = false;
   // prevent scrolling of the search results when ad modal is up
   $('.modal').on('show', function() {
+    viewingAd = true;
     $('body').css('overflow', 'hidden');
   })
   .on('hidden', function() {
+    viewingAd = false;
     $('body').css('overflow', 'auto');
+  });
+
+  // prevent scrolling of search results when ad modal is up on ios
+  $(document).on('touchmove', function(e) {
+    if ($(e.target).parents().hasClass('ad-body')) {
+      return;
+    }
+    if (!viewingAd) {
+      return;
+    }
+    e.preventDefault();
   });
 
   // bind to show/shown events to resize modal to better fit the screen
