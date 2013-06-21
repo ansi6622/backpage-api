@@ -2,7 +2,7 @@
 <html>
   <head>
     <title>backpage.com</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <!-- Bootstrap -->
     <link href="http://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/2.3.2/css/bootstrap.min.css" rel="stylesheet" media="screen"></link>
     <link href="http://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/2.3.2/css/bootstrap-responsive.min.css" rel="stylesheet" media="screen"></link>
@@ -64,10 +64,12 @@
       <div class="row-fluid">
 
         <!-- Sidebar -->
-        <div class="span3">
+        <div class="span3 noscroll">
           <img src="http://www.backpage.com/new_bp_logo.gif" class="logo"/>
-          <img src="ajax-loader.gif" class="loader"/>
-          <input id="site-input" type="text" data-provide="typeahead" placeholder="Enter a city" class="input-block-level"/>
+          <div class="input-append" style="width: 100%;">
+            <input id="site-input" type="text" data-provide="typeahead" placeholder="Enter a city" class="input-block-level"/>
+            <button class="btn" id="clear-search-button" type="button">Clear</button>
+          </div>
 
           <div class="accordion" id="categories-toggle-container">
             <div class="accordion-group">
@@ -131,12 +133,14 @@
         </div>
 
         <!-- Content area -->
-        <div class="span9">
-          <h3 id="category-header"></h3>
-          <div id="ads"></div>
+        <div class="span9" class="noscroll">
+          <h3 id="category-header" class="noscroll"></h3>
+          <div id="ads" class="noscroll"></div>
         </div>
 
       </div>
+
+      <div class="loader">Loading...</div>
     </div>
 
     <script id="section-template" type="text/x-handlebars-template">
@@ -187,6 +191,7 @@
     <script src="http://cdnjs.cloudflare.com/ajax/libs/masonry/2.1.08/jquery.masonry.min.js"></script>
     <script src="http://cdnjs.cloudflare.com/ajax/libs/jquery-infinitescroll/2.0b2.110713/jquery.infinitescroll.min.js"></script>
     <script src="http://cdnjs.cloudflare.com/ajax/libs/moment.js/2.0.0/moment.min.js"></script>
+    <script src="http://cdnjs.cloudflare.com/ajax/libs/fastclick/0.6.7/fastclick.min.js"></script>
 
     <script src="../../jquery.backpage.js"></script>
     <script src="example.js"></script>

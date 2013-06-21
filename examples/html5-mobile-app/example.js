@@ -4,7 +4,6 @@
  * mobile application.
  */
 $(window).on('ready', function() {
-
   /**
    * If search results are loading.  Used to throttle infinite scroll loading 
    * of results.
@@ -30,6 +29,13 @@ $(window).on('ready', function() {
    * @type {Boolean}
    */
   var lastPage = false;
+
+  /**
+   * Current latitude/longitude position, only detected/set if no site has
+   * been selected before.
+   * @type {Object}
+   */
+  var curPos = null;
 
   /**
    * Splits the current URL hash into key/value pairs.
@@ -92,9 +98,11 @@ $(window).on('ready', function() {
       loadCategories(opts.site)
       .then(function(sections, categories) {
         requestsPending--;
-        // render and show category selector
-        renderCategories(opts.site, sections, categories);
-        $('#categories-toggle-container').show();
+        // render and show category selector if this is a new search
+        if (curPage === 0) {
+          renderCategories(opts.site, sections, categories);
+          $('#categories-toggle-container').show();
+        }
         // if a category is selected
         if (opts.category) {
           // populate category header with category name
@@ -153,7 +161,7 @@ $(window).on('ready', function() {
           // hide search filter
           $('#search-toggle-container').hide();
           // open category selector
-          $('#categories-toggle-content').collapse('toggle');
+          $('#categories-toggle-content').collapse('show');
         }
       });
     }
@@ -271,7 +279,7 @@ $(window).on('ready', function() {
    * @param  {[type]} opts Key/value pairs representing the URL hash.
    */
   var selectCategory = function(opts) {
-    $('#categories-toggle-content').collapse('toggle');
+    $('#categories-toggle-content').collapse('hide');
     window.location.hash = buildHash(opts);
   };
 
@@ -405,7 +413,7 @@ $(window).on('ready', function() {
     // rewrite links to open in new window
     var content;
     try {
-      content = $(ad.Ad);
+      content = $('<div>' + ad.Ad + '</div>');
       content.find('a').each(function() {
         var url = $(this).attr('href');
         $(this).on('click', function(e) {
@@ -623,6 +631,200 @@ $(window).on('ready', function() {
     };
   };
 
+  /**
+   * Initializes the application with any needed preferences, queries
+   * a list of sites from the API, and sets to the nearest site if no
+   * preferred site is set.
+   * @param  {Object} prefs Key/value pairs of URL hash values.
+   */
+  var initApp = function(prefs) {
+    prefs = prefs || {};
+    requestsPending++;
+    $.fn.backpage({
+      object: 'Site',
+      params: {
+        Country: 'US'
+      }
+    })
+    .then(function(sites) {
+      requestsPending--;
+      // only set if no saved preferences
+      if (curPos) {
+        var nearestSite = findNearestSite(sites);
+        $('#site-input').val(nearestSite);
+        window.location.hash = buildHash($.extend(curOpts(), {site: nearestSite}));
+      // load saved site preference
+      } else {
+        window.location.hash = buildHash($.extend(curOpts(), prefs));
+        renderHash();
+      }
+      $('#site-input').removeAttr('disabled');
+      $('#site-input').typeahead({
+
+        // query sites for names matching the input
+        source: function(query) {
+          query = query.toLowerCase();
+          var results = [];
+          $.each(sites, function() {
+            if (this.Name.indexOf(query) != -1) {
+              results.push(this.Name);
+            }
+          });
+          return results;
+        },
+
+        // populate the category list when a site is selected
+        updater: function(site) {
+          savePrefs({site: site});
+          resetAdPaging();
+          window.location.hash = buildHash($.extend(curOpts(), {site: site}));
+          return site;
+        }
+      });
+    });
+  };
+
+  /**
+   * Called when PhoneGap deviceready event is fired.  Opens the preferences db.
+   */
+  var deviceReady = function() {
+    var db = window.openDatabase('Database', '1.0', 'Backpage Prefs', 200000);
+    db.transaction(populateDB, dbError, populateSuccess);
+  };
+
+  /**
+   * Creates the preferences DB if needed.
+   * @param  {Object} tx Transaction object.
+   */
+  var populateDB = function(tx) {
+    // tx.executeSql('DROP TABLE IF EXISTS prefs');
+    tx.executeSql('CREATE TABLE IF NOT EXISTS prefs (id unique, value)');
+  };
+
+  /**
+   * Called on successful populateDB -- whether a table is created or not.
+   */
+  var populateSuccess = function() {
+    var db = window.openDatabase('Database', '1.0', 'Backpage Prefs', 200000);
+    db.transaction(getPrefs, dbError);
+  };
+
+  /**
+   * Gets preferences entry from local DB.  Preferences are stored as a
+   * JSON string.
+   * @param  {Object} tx Transaction object.
+   */
+  var getPrefs = function(tx) {
+    tx.executeSql('SELECT * FROM prefs', [], prefsSuccess, dbError);
+  };
+
+  /**
+   * Called on successful getPrefs().  Reads preferences and initializes
+   * the application.  Attempts to detect geo location if no saved preferences
+   * are found.
+   * @param  {[type]} tx      Transaction object.
+   * @param  {[type]} results Result set.
+   */
+  var prefsSuccess = function(tx, results) {
+    var prefs = {};
+    // found preferences, initialize with that
+    if (results.rows.length) {
+      prefs = JSON.parse(results.rows.item(0).value);
+      initApp(prefs);
+    // no preferences found, detect location
+    } else {
+      requestsPending++;
+      console.log('get geo pos');
+      navigator.geolocation.getCurrentPosition(
+        // location detected successfully
+        function(pos) {
+          requestsPending--;
+          console.log('got geo pos');
+          curPos = pos;
+          initApp();
+        },
+        // error detecting location, initialize app w/ no site selected
+        function(err) {
+          requestsPending--;
+          initApp();
+        },
+        // only wait 5 seconds for geolocation
+        {
+          // timeout: 5000
+        }
+      );
+    }
+  };
+
+  /**
+   * Save prefs to local database.
+   * @param  {Object} prefs Key/value pairs to save.  Currently site is used.
+   */
+  var savePrefs = function(prefs) {
+    var db = window.openDatabase('Database', '1.0', 'Backpage Prefs', 200000);
+    db.transaction(
+      function(tx) {
+        tx.executeSql("DELETE FROM prefs");
+        tx.executeSql("INSERT INTO prefs (id, value) VALUES (0, '" + JSON.stringify(prefs) + "')");
+      }
+    );
+  };
+
+  /**
+   * Called if there's a db error.
+   * @param  {Object} err The error object.
+   */
+  var dbError = function(err) {
+    // console.log(err);
+  };
+
+  /**
+   * Radius of Earth in miles.  Used for distance calculations.
+   * @type {Number}
+   */
+  var R = 3961.3;
+
+  /**
+   * Calculates the distance in miles between two lat/long pairs.
+   * @param  {Number} lat1D  First latitude
+   * @param  {Number} long1D First longitude
+   * @param  {Number} lat2D  Second latitude
+   * @param  {Number} long2D Second longitude
+   * @return {Number}        Distance between first and second latitude.
+   */
+  var calcDistance = function(lat1D, long1D, lat2D, long2D) {
+    // convert to radians
+    var lat1R = lat1D * Math.PI / 180.0;
+    var long1R = long1D * Math.PI / 180.0;
+    var lat2R = lat2D * Math.PI / 180.0;
+    var long2R = long2D * Math.PI / 180.0;
+    // get distance in radians
+    var dLat = (lat2D - lat1D) * Math.PI / 180.0;
+    var dLong = (long2D - long1D) * Math.PI / 180.0;
+    var a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+        Math.cos(lat1R) * Math.cos(lat2R) *
+        Math.sin(dLong/2) * Math.sin(dLong/2);
+    var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
+  };
+
+  var findNearestSite = function(sites) {
+    var nearestSite;
+    var shortestDistance = 99999999;
+    $.each(sites, function(i, site) {
+      var d = calcDistance(curPos.coords.latitude, curPos.coords.longitude, site.Latitude, site.Longitude);
+      if (d < shortestDistance) {
+        shortestDistance = d;
+        nearestSite = site.Name;
+      }
+    });
+    return nearestSite;
+  };
+
+  document.addEventListener('deviceready', function() {
+    deviceReady();
+  }, false);
+
   // handle url hash changes
   $(window).on('hashchange', function() {
     renderHash();
@@ -630,38 +832,6 @@ $(window).on('ready', function() {
 
   // populate the typeahead with all US sites
   $('#site-input').attr('disabled', 'disabled');
-  requestsPending++;
-  $.fn.backpage({
-    object: 'Site',
-    params: {
-      Country: 'US'
-    }
-  })
-  .then(function(sites) {
-    requestsPending--;
-    $('#site-input').removeAttr('disabled');
-    $('#site-input').typeahead({
-
-      // query sites for names matching the input
-      source: function(query) {
-        query = query.toLowerCase();
-        var results = [];
-        $.each(sites, function() {
-          if (this.Name.indexOf(query) != -1) {
-            results.push(this.Name);
-          }
-        });
-        return results;
-      },
-
-      // populate the category list when a site is selected
-      updater: function(site) {
-        resetAdPaging();
-        window.location.hash = buildHash($.extend(curOpts(), {site: site}));
-        return site;
-      }
-    });
-  });
 
   // initialize masonry plugin
   $('#ads').masonry({
@@ -698,26 +868,25 @@ $(window).on('ready', function() {
     $('#search-button').trigger('click');
   });
 
-  var viewingAd = false;
   // prevent scrolling of the search results when ad modal is up
+  var adModalVisible = false;
   $('.modal').on('show', function() {
-    viewingAd = true;
-    $('body').css('overflow', 'hidden');
+    adModalVisible = true;
+    $(document).css('overflow', 'hidden');
   })
   .on('hidden', function() {
-    viewingAd = false;
-    $('body').css('overflow', 'auto');
+    adModalVisible = false;
+    $(document).css('overflow', 'auto');
   });
 
-  // prevent scrolling of search results when ad modal is up on ios
-  $(document).on('touchmove', function(e) {
-    if ($(e.target).parents().hasClass('ad-body')) {
+  // prevent scrolling of search results when ad modal is up (iOS)
+  $('body').on('touchmove', function(e) {
+    if ($(e.target).parents('.ad-body').length) {
       return;
     }
-    if (!viewingAd) {
-      return;
+    if (adModalVisible) {
+      e.preventDefault();
     }
-    e.preventDefault();
   });
 
   // bind to show/shown events to resize modal to better fit the screen
@@ -728,21 +897,34 @@ $(window).on('ready', function() {
     resizeModalShown();
   });
 
+  // bind to clear site input button
+  $('#clear-search-button').on('click', function() {
+    $('#site-input').val('');
+  });
+
   // resize modal if the window is resized
   $(window).on('resize', function() {
     resizeModalShow();
     resizeModalShown();
+    $('#site-input').width($('#site-input').parent().outerWidth() - $('#clear-search-button').outerWidth() - 13);
   });
+  $(window).trigger('resize');
 
   // show the loading gif if any requests are pending
   setInterval(function() {
     if (requestsPending === 0) {
-      $('.loader').hide();
+      $('.loader').css('left', '-999px');
     } else {
-      $('.loader').show();
+      $('.loader').css('left', ($(window).width() - $('.loader').width()) / 2);
     }
   }, 500);
 
-  // load the current hash
-  renderHash();
+  // initialize FastClick to avoid 300ms click delay on mobile platforms
+  FastClick.attach(document.body);
+
+  // fire deviceready manually if phonegap isn't loaded
+  if (typeof device == 'undefined') {
+    deviceReady();
+  }
+
 });
