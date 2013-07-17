@@ -38,6 +38,13 @@ $(window).on('ready', function() {
   var curPos = null;
 
   /**
+   * Current active request to load ads.  Aborted if a new category or site
+   * is selected.
+   * @type {Object}
+   */
+  var activeRequest = null;
+
+  /**
    * Splits the current URL hash into key/value pairs.
    * @return {Object} Key/value pairs representing the URL hash.
    */
@@ -152,6 +159,10 @@ $(window).on('ready', function() {
               site: opts.site,
               categories: categories
             });
+          })
+          .fail(function(xhr, err) {
+            requestsPending--;
+            alert('There was a problem connecting to the Backpage servers, please try again.');
           });
           // show search filter
           $('#search-toggle-container').show();
@@ -163,6 +174,10 @@ $(window).on('ready', function() {
           // open category selector
           $('#categories-toggle-content').collapse('show');
         }
+      })
+      .fail(function(xhr, err) {
+        requestsPending--;
+        alert('There was a problem connecting to the Backpage servers, please try again.');
       });
     }
   };
@@ -333,6 +348,7 @@ $(window).on('ready', function() {
    */
   var renderAds = function(opts) {
     var ads = opts.ads || [];
+    console.log(ads);
     // compile handlebars templates
     var adThumbSrc = $('#ad-thumb-template').html();
     var adThumbTemplate = Handlebars.compile(adThumbSrc);
@@ -362,13 +378,18 @@ $(window).on('ready', function() {
       html.find('a').on('click', function(e) {
         e.preventDefault();
         // load ad details
+        requestsPending++;
         loadAd({
           id: $(this).data('id'),
           site: opts.site
         })
         .then(function(ads) {
           // render ad details
+          requestsPending--;
           renderAd(ads[0], opts.categories, opts.site);
+        })
+        .fail(function(xhr, err) {
+          alert('There was a problem connecting to the Backpage servers, please try again.');
         });
       });
       // append ads to container and notify masonry
@@ -407,6 +428,7 @@ $(window).on('ready', function() {
    * @param  {String} site       Site the ad came from (losangeles.backpage.com).
    */
   var renderAd = function(ad, categories, site) {
+    console.log(ad);
     // scroll to top of ad modal body
     $('.ad-body').scrollTop(0);
     $('.ad-title').text(ad.Title);
@@ -435,8 +457,8 @@ $(window).on('ready', function() {
       window.open(ad.AdUrl, '_blank', 'location=yes');
     });
     // show map link
-    if (ad.MapAddress && ad.MapZip) {
-      var mapUrl = "http://maps.google.com/maps?q=" + encodeURIComponent(ad.MapAddress) + " " + ad.MapZip;
+    if (ad.MapAddress && ad.MapZip && ad.MapAddress != 'null' && ad.MapZip != 'null') {
+      var mapUrl = "http://maps.google.com/maps?q=" + encodeURIComponent(ad.MapAddress + " " + ad.MapZip);
       $('.map-link').off('click');
       $('.map-link').on('click', function(e) {
         e.preventDefault();
@@ -449,40 +471,33 @@ $(window).on('ready', function() {
     // hide reply link by default
     $('.reply-link').hide();
     if (ad.AllowReplies != 'No') {
-      var replyUrl = 'http://posting.' + site;
-      // find category the ad is in to get CategoryKey for replyUrl
-      $.each(categories, function(e, category) {
-        if (category.Id == ad.Category) {
-          replyUrl += '/' + category.CategoryKey + '/classifieds/Reply?oid=' + ad.Id;
-          $('.reply-link').off('click');
-          $('.reply-link').on('click', function(e) {
-            e.preventDefault();
-            window.open(replyUrl, '_blank', 'location=yes');
-          });
-          $('.reply-link').show();
-        }
+      $('.reply-link').off('click');
+      $('.reply-link').on('click', function(e) {
+        e.preventDefault();
+        window.open(ad.ReplyUrl, '_blank', 'location=yes');
       });
+      $('.reply-link').show();
     }
     // show poster's age
     if (ad.Age) {
-      $('.ad-age-container').show();
-      $('.ad-age').text(ad.Age);
+      $('.ad-age').text('Age: ' + ad.Age);
+      $('.ad-age').show();
     } else {
-      $('.ad-age-container').hide();
+      $('.ad-age').hide();
     }
     // show number of bedrooms
     if (ad.Bedrooms) {
-      $('.ad-bedrooms-container').show();
-      $('.ad-bedrooms').text(ad.Bedrooms);
+      $('.ad-bedrooms').show();
+      $('.ad-bedrooms').text('Bedrooms: ' + ad.Bedrooms);
     } else {
-      $('.ad-bedrooms-container').hide();
+      $('.ad-bedrooms').hide();
     }
     // show price
     if (ad.Price) {
-      $('.ad-price-container').show();
-      $('.ad-price').text(ad.Price);
+      $('.ad-price').show();
+      $('.ad-price').text('$' + ad.Price);
     } else {
-      $('.ad-price-container').hide();
+      $('.ad-price').hide();
     }
     // clear image carousel
     $('.carousel-items').html('');
@@ -554,10 +569,11 @@ $(window).on('ready', function() {
    */
   var resizeModalShown = function() {
     // 40px padding on top/bottom
-    var viewAdHeight = $(window).height() - 80;
+    var top = $('#view-ad').css('top').replace(/[^-\d\.]/g, '');
+    var viewAdHeight = $(window).height() - (2 * top);
     $('#view-ad').height(viewAdHeight);
     // body height is total height minus footer minus header minus an additional 30 from padding
-    var adBodyHeight = viewAdHeight - $('#view-ad .modal-header').height() - $('#view-ad .modal-footer').height() - 30;
+    var adBodyHeight = viewAdHeight - 30;
     $('.ad-body').css('max-height', adBodyHeight);
     $('.ad-body').css('height', adBodyHeight);
   };
@@ -643,7 +659,7 @@ $(window).on('ready', function() {
     $.fn.backpage({
       object: 'Site',
       params: {
-        Country: 'US'
+        CountryCode: 'US'
       }
     })
     .then(function(sites) {
@@ -651,13 +667,16 @@ $(window).on('ready', function() {
       // only set if no saved preferences
       if (curPos) {
         var nearestSite = findNearestSite(sites);
-        $('#site-input').val(nearestSite);
+        if (nearestSite) {
+          $('#site-input').val(nearestSite);
+        }
+        console.log('nearest site is ' + nearestSite);
         window.location.hash = buildHash($.extend(curOpts(), {site: nearestSite}));
       // load saved site preference
       } else {
         window.location.hash = buildHash($.extend(curOpts(), prefs));
-        renderHash();
       }
+      renderHash();
       $('#site-input').removeAttr('disabled');
       $('#site-input').typeahead({
 
@@ -681,6 +700,10 @@ $(window).on('ready', function() {
           return site;
         }
       });
+      $('#connection-error').hide();
+    })
+    .fail(function(xhr, err) {
+      $('#connection-error').show();
     });
   };
 
@@ -734,12 +757,10 @@ $(window).on('ready', function() {
     // no preferences found, detect location
     } else {
       requestsPending++;
-      console.log('get geo pos');
       navigator.geolocation.getCurrentPosition(
         // location detected successfully
         function(pos) {
           requestsPending--;
-          console.log('got geo pos');
           curPos = pos;
           initApp();
         },
@@ -749,8 +770,10 @@ $(window).on('ready', function() {
           initApp();
         },
         // only wait 5 seconds for geolocation
+        // allow geo locations up to a day old
         {
-          // timeout: 5000
+          // timeout: 5000,
+          maximumAge: 86400000
         }
       );
     }
@@ -872,22 +895,31 @@ $(window).on('ready', function() {
   var adModalVisible = false;
   $('.modal').on('show', function() {
     adModalVisible = true;
-    $(document).css('overflow', 'hidden');
+    $('body').css('overflow', 'hidden');
+    $('body').css('overflow-x', 'hidden');
+    $('body').css('overflow-y', 'hidden');
+    // turn off backdrop due to ios7 bugs
   })
   .on('hidden', function() {
     adModalVisible = false;
-    $(document).css('overflow', 'auto');
+    $('body').css('overflow', 'auto');
+    $('body').css('overflow-x', 'auto');
+    $('body').css('overflow-y', 'auto');
   });
 
   // prevent scrolling of search results when ad modal is up (iOS)
-  $('body').on('touchmove', function(e) {
-    if ($(e.target).parents('.ad-body').length) {
-      return;
-    }
-    if (adModalVisible) {
-      e.preventDefault();
-    }
-  });
+  // $(document).on('touchmove', function(e) {
+  //   if (adModalVisible) {
+  //     var el = e.target;
+  //     do {
+  //       console.log(el.id);
+  //       if (el.id == 'view-ad') {
+  //         e.stopImmediatePropagation();
+  //         e.preventDefault();
+  //       }
+  //     } while (el = el.parentNode);
+  //   }
+  // });
 
   // bind to show/shown events to resize modal to better fit the screen
   $('#view-ad').on('show', function(){
@@ -900,6 +932,10 @@ $(window).on('ready', function() {
   // bind to clear site input button
   $('#clear-search-button').on('click', function() {
     $('#site-input').val('');
+  });
+
+  $('#load-sites-button').on('click', function() {
+    deviceReady();
   });
 
   // resize modal if the window is resized
